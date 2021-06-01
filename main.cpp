@@ -196,16 +196,16 @@ main(int argc, char *argv[])
 	for (double target_taskset_util = util_start ; target_taskset_util < util_end ; target_taskset_util += util_step) {
 		printf("TASKSET UTIL: %f\n", target_taskset_util);
 
-		/* Init XML output */
-		TiXmlDocument doc;
-		TiXmlElement *system_elem;
-		system_elem = new TiXmlElement("system");
-		doc.LinkEndChild(system_elem);
-
 		/* For each taskset util, we gen many tasksets */
 		for (int taskset_idx = 0 ; taskset_idx < num_tasksets_per_util ; taskset_idx++) {
 			double cur_taskset_util = 0.0, cur_task_util = 0.0;
 			int task_idx = 0;
+
+			/* Init XML output */
+			TiXmlDocument doc;
+			TiXmlElement *system_elem;
+			system_elem = new TiXmlElement("system");
+			doc.LinkEndChild(system_elem);
 
 			/* Output directory name */
 			string tasksetFolderBase = "./experiments/" + exp_name + "/" + "tasksetUtilRange=" + to_string(util_start) + "-" + to_string(util_step) + "-" + to_string(util_end) + "_tasksetNum=" + to_string(num_tasksets_per_util) + "_taskUtil=" + to_string(task_util_min) + "-" + to_string(task_util_max) + "/" + to_string(target_taskset_util) + "/";
