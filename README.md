@@ -12,6 +12,7 @@ The following utilization strings are accepted as input:
 
 **Other notes:**
 Task deadlines are equal to their periods.
+All generation code is in main.cpp, the rest of the files aside from the run script and the makefile are related to XML parsing and the code comes from the tiny xml parser: http://www.grinninglizard.com/tinyxml/
 
 **Current Argument List (SUBJECT TO CHANGE)**
 1. Taskset util start
