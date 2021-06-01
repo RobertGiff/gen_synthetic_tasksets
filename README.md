@@ -8,6 +8,7 @@ The following utilization strings are accepted as input:
 * bimodal_light  [0.01, 0.9] 8/9 weighted lower value
 * bimodal_medium [0.01, 0.9] 6/9 weighted lower value
 * bimodal_heavy  [0.01, 0.9] 4/9 weighted lower value
+**You can refer to main.cpp to see how to add more! If you want to add a different bimodal range you will need to also update the random number function in main.cpp**
 
 **Other notes:**
 Task deadlines are equal to their periods.
