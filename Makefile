@@ -1,5 +1,5 @@
 TARGETS = generator
-CC = g++ -I../confs/inc -I../sim/inc
+CC = g++ -I../confs/inc -I../sim/inc -g
 CFLAGS = -c -Wall -g
 
 all: $(TARGETS)
