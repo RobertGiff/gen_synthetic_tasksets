@@ -23,4 +23,5 @@ All generation code is in main.cpp, the rest of the files aside from the run scr
 6. Task period lower value (inclusive)
 7. Task period upper value (inclusive)
 8. Dependency probability that any task will be dependent on another of the previous tier, 0 to disable dependency, between [0, 1.0]
-9. Experiment Name (will be the output directory name)
+9. Fixed priority max, 1 ... max, inclusive. Set to 0 do disable priority
+10. Experiment Name (will be the output directory name)

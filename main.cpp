@@ -17,7 +17,17 @@
 #include "tinystr.h"
 using namespace std;
 
-#define NUM_SYS_TASK_LIMIT 10000
+#define NUM_SYS_TASK_LIMIT 1000
+#define MAX_NUM_CORES 500
+
+struct core {
+	double util;
+	int task_idxs[NUM_SYS_TASK_LIMIT];
+	double task_utils[NUM_SYS_TASK_LIMIT];
+	int num_tasks;
+};
+
+struct core cores[MAX_NUM_CORES];
  
 double
 randDoubleFrom(double min, double max)
@@ -64,17 +74,105 @@ getRandDouble(double task_util_min, double task_util_max, double weight_lower)
 	return cur_util;
 }
 
+/* returns core idx that task was placed on */
+int
+bestfit_pack_task(int task_idx, double util)
+{
+	int core_idx, ret = -1;
+	double smallest_diff = 1.0;
+
+	printf("packing task: %d, with util: %f\n", task_idx, util);
+
+	for (core_idx = 0 ; core_idx < MAX_NUM_CORES ; core_idx++) {
+		struct core *cur_core = &cores[core_idx];
+		
+		if (cur_core->util + util > 1.0) continue;
+
+		/* it fits, check to see if we should pack here... */
+		if ((1.0 - (cur_core->util + util)) < smallest_diff) {
+			smallest_diff = 1.0 - (cur_core->util + util);
+			printf("fits onto core[%d] with remaining room: %f\n",
+					core_idx, smallest_diff);
+			ret = core_idx;
+		}
+	}
+
+	printf("placing on core: %d\n", ret);
+
+	if (ret != -1) {
+		cores[ret].util += util;
+		cores[ret].task_idxs[cores[ret].num_tasks] = task_idx;
+		cores[ret].task_utils[cores[ret].num_tasks] = util;
+		cores[ret].num_tasks++;
+	}
+
+	return ret;
+}
+
+void
+output_core_mappings(int fd)
+{
+	int core_idx;
+
+	/* OUTPUT TO TXT */
+	for (core_idx = 0 ; core_idx < MAX_NUM_CORES ; core_idx++) {
+		char txt_buf[1000];  /* 1000 is arbitrary */
+		int task_idx = 0, num_to_write = 0, num_written = 0;
+		struct core *cur_core = &cores[core_idx];
+
+		/* don't output cores that were not allocated to */
+		if (cur_core->util == 0) return;
+
+		memset(txt_buf, '\0', sizeof(txt_buf));
+
+		num_to_write = sprintf(txt_buf, "core[%d], u: %f\n",
+				core_idx, cur_core->util);
+
+		printf("text to write: %s\n", txt_buf);
+		num_written = 0;
+		while (num_written < num_to_write) {
+			int ret = write(fd, txt_buf + num_written, num_to_write - num_written);
+			if (ret == -1) {
+				printf("errno: %d\n", errno);
+				assert(0);
+			}
+			num_written += ret;
+		}
+
+		/* output each task */
+		for (task_idx = 0 ; task_idx < cur_core->num_tasks ; task_idx++) {
+			memset(txt_buf, '\0', sizeof(txt_buf));
+			num_to_write = sprintf(txt_buf, "    task[%d], u:%f\n",
+					cur_core->task_idxs[task_idx],
+					cur_core->task_utils[task_idx]);
+			num_written = 0;
+			while (num_written < num_to_write) {
+				int ret = write(fd, txt_buf + num_written, num_to_write - num_written);
+				if (ret == -1) {
+					printf("errno: %d\n", errno);
+					assert(0);
+				}
+				num_written += ret;
+			}
+		}
+	}
+}
+
 /* returns task util */
 double
 create_and_xmlwrite_task(TiXmlElement *component, int *task_idx,
 		double task_util_min, double task_util_max, double weight_lower,
 		double pre_util, double period_min, double period_max, int fd,
-		int *task_array, int *task_array_idx)
+		int *task_array, int *task_array_idx, int max_prio)
 {
 	double wcet = 0.0, period = 0.0, cur_util = 0.0;
+	int core, prio;
 	char name_buf[100]; /* 100 is arbitrary */
 	char xml_buf[100];  /* 100 is arbitrary */
 	char txt_buf[1000];  /* 1000 is arbitrary */
+
+	/* FIXME REMOVE ME AND ADD BACK IN NORMAL PERIOD GENERATION */
+	//int possible_periods[5] = {2, 4, 8, 16, 32};
 
 	//task name="0" p="4795.376230080735" d="4795.376230080735" ref_e="751.461109" ref_util="0.16"
 	
@@ -88,12 +186,17 @@ create_and_xmlwrite_task(TiXmlElement *component, int *task_idx,
 	//printf("task util: %f, ", cur_util);
 	
 	/* get random period in range */
+	//period = possible_periods[rand() % (sizeof(possible_periods) / sizeof(int))];
 	period = getRandDouble(period_min, period_max, -1.0);
 	//printf("period: %f\n", period);
 
 	/* calculate wcet for task */
 	wcet = cur_util * period;
 	//printf("wcet: %f, ", wcet);
+
+	/* pack task to a core using best-fit, if not enough room then pack onto new core */
+	core = bestfit_pack_task(*task_idx, cur_util);
+	assert(core != -1);
 
 	/* OUTPUT TO XML */
 	TiXmlElement *xmltask = new TiXmlElement("task");
@@ -118,10 +221,19 @@ create_and_xmlwrite_task(TiXmlElement *component, int *task_idx,
 	sprintf(xml_buf, "%f", cur_util);
 	xmltask->SetAttribute("u", xml_buf);
 
+	memset(xml_buf, '\0', sizeof(xml_buf));
+	sprintf(xml_buf, "%d", core);
+	xmltask->SetAttribute("core", xml_buf);
+
+	prio = (rand() % max_prio) + 1;
+	memset(xml_buf, '\0', sizeof(xml_buf));
+	sprintf(xml_buf, "%d", prio);
+	xmltask->SetAttribute("prio", xml_buf);
+
 	/* OUTPUT TO TXT */
 	memset(txt_buf, '\0', sizeof(txt_buf));
-	int num_to_write= sprintf(txt_buf, "task %d, p: %f, d: %f, e: %f, u: %f\n",
-				*task_idx, period, period, wcet, cur_util);
+	int num_to_write= sprintf(txt_buf, "task %d, p: %f, d: %f, e: %f, u: %f, core: %d, prio: %d\n",
+				*task_idx, period, period, wcet, cur_util, core, prio);
 	printf("text to write: %s\n", txt_buf);
 	int num_written = 0;
 	while (num_written < num_to_write) {
@@ -142,7 +254,7 @@ create_and_xmlwrite_task(TiXmlElement *component, int *task_idx,
 int
 main(int argc, char *argv[])
 {
-	int num_tasksets_per_util = 0;
+	int num_tasksets_per_util = 0, max_prio;
 	double util_start = 0.0, util_end = 0.0, util_step = 0.0;
 	double task_util_min = 0.0, task_util_max = 0.0, weight_lower = 0.0;
 	double period_min = 0.0, period_max = 0.0, dep_prob = 0.0;
@@ -150,12 +262,13 @@ main(int argc, char *argv[])
 	util_start                    = atof(argv[1]);
 	util_end                      = atof(argv[2]);
 	util_step                     = atof(argv[3]);
-	num_tasksets_per_util         = atof(argv[4]);
+	num_tasksets_per_util         = atoi(argv[4]);
 	string task_util_distribution = argv[5];
 	period_min		      = atof(argv[6]);
 	period_max		      = atof(argv[7]);
 	dep_prob		      = atof(argv[8]);
-	string exp_name               = argv[9];
+	max_prio		      = atoi(argv[9]);
+	string exp_name               = argv[10];
 
 	if (task_util_distribution.compare("uniform_light") == 0) {
 		task_util_min = 0.01;
@@ -208,6 +321,9 @@ main(int argc, char *argv[])
 			int *task_array = (int *)malloc(sizeof(int) * NUM_SYS_TASK_LIMIT);
 			assert(task_array);
 
+			/* reset core mappings */
+			memset(cores, '\0', sizeof(cores));
+
 			/* Init XML output */
 			TiXmlDocument doc;
 			TiXmlElement *system_elem;
@@ -230,13 +346,41 @@ main(int argc, char *argv[])
 				assert(0);
 			}
 
+			/* OUTPUT Text Core Mapping file name */
+			string tasksetFolderCoreText = tasksetFolderBase + "input_tasksetUtil=" + to_string(target_taskset_util) + "_index=" + to_string(taskset_idx) + "_core_mapping.txt";
+			printf("taskset folder for text output: %s\n", tasksetFolderCoreText.c_str());
+			int fd_core_mapping = open(tasksetFolderCoreText.c_str(), O_RDWR | O_CREAT, 0666);
+			if (fd_core_mapping == -1) {
+				printf("Open error: %d\n", errno);
+				assert(0);
+			}
+
 			/* Generate tasks of util between start and end until our summed task util == taskset util */
 			assert(cur_task_util == 0.0);
 			do {
 				cur_taskset_util += cur_task_util;
-				cur_task_util = create_and_xmlwrite_task(system_elem, &task_idx,
-						task_util_min, task_util_max, weight_lower, -1.0,
-						period_min, period_max, fd, task_array, &task_array_idx);
+				/* if the difference is within task util range, generate final task */
+				if ((target_taskset_util - cur_taskset_util) >= task_util_min &&
+				    (target_taskset_util - cur_taskset_util) <= task_util_max) {
+					printf("Room to allocate one more task! %f\n", cur_taskset_util);
+					cur_task_util = create_and_xmlwrite_task(system_elem, &task_idx,
+							task_util_min, task_util_max, weight_lower,
+							target_taskset_util-cur_taskset_util,
+							period_min, period_max, fd, task_array, &task_array_idx,
+							max_prio);
+					cur_taskset_util += cur_task_util;
+					break;
+				} else if ((target_taskset_util - cur_taskset_util) < task_util_min) {
+					/* Not enough util left to generate another task, stop */
+					printf("Not enough room to allocate another task, stop %f\n", cur_taskset_util);
+					break;
+				} else {
+					/* Normal case */
+					cur_task_util = create_and_xmlwrite_task(system_elem, &task_idx,
+							task_util_min, task_util_max, weight_lower, -1.0,
+							period_min, period_max, fd, task_array, &task_array_idx,
+							max_prio);
+				}
 
 			} while ((cur_taskset_util + cur_task_util) < target_taskset_util);
 
@@ -247,14 +391,15 @@ main(int argc, char *argv[])
 			//printf("util after loop: %f, remaining: %f\n", cur_taskset_util,
 			//	target_taskset_util - cur_taskset_util);
 
-			if ((target_taskset_util - cur_taskset_util) > task_util_min) {
-				//printf("room to allocate one more task\n");
-				cur_task_util = create_and_xmlwrite_task(system_elem, &task_idx,
-						task_util_min, task_util_max, weight_lower,
-						target_taskset_util-cur_taskset_util,
-						period_min, period_max, fd, task_array, &task_array_idx);
-				cur_taskset_util += cur_task_util;
-			}
+			//if ((target_taskset_util - cur_taskset_util) > task_util_min) {
+			//	//printf("room to allocate one more task\n");
+			//	cur_task_util = create_and_xmlwrite_task(system_elem, &task_idx,
+			//			task_util_min, task_util_max, weight_lower,
+			//			target_taskset_util-cur_taskset_util,
+			//			period_min, period_max, fd, task_array, &task_array_idx,
+			//			max_prio);
+			//	cur_taskset_util += cur_task_util;
+			//}
 			//printf("FINAL TASKSET UTIL: %f\n", cur_taskset_util);
 
 			/**
@@ -330,6 +475,9 @@ main(int argc, char *argv[])
 			string tasksetFolderXML = tasksetFolderBase + "input_tasksetUtil=" + to_string(target_taskset_util) + "_index=" + to_string(taskset_idx) + ".xml";
 			//printf("FULL SAVE PATH: %s\n", tasksetFolderXML.c_str());
 			doc.SaveFile( tasksetFolderXML.c_str() );
+
+			/* OUTPUT summary core mappings in its own text file */
+			output_core_mappings(fd_core_mapping);
 
 			free(task_array);
 			close(fd);
