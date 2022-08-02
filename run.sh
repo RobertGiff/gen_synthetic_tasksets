@@ -34,8 +34,8 @@
 rm -fr ./experiments/uniform_light_0.5_1.5_0.25-step
 ./generator 0.5 1.75 0.25 10 uniform_light 0.1 1 0 10 uniform_light_0.5_1.5_0.25-step
 
-rm -fr ./experiments/uniform_medium_0.5_1.5_0.25-step
-./generator 0.5 1.75 0.25 10 uniform_medium 0.1 1 0 10 uniform_medium_0.5_1.5_0.25-step
+#rm -fr ./experiments/uniform_medium_0.5_1.5_0.25-step
+#./generator 0.5 1.75 0.25 10 uniform_medium 0.1 1 0 10 uniform_medium_0.5_1.5_0.25-step
 
-rm -fr ./experiments/uniform_heavy_0.5_1.5_0.25-step
-./generator 0.5 1.75 0.25 10 uniform_heavy 0.1 1 0 10 uniform_heavy_0.5_1.5_0.25-step
+#rm -fr ./experiments/uniform_heavy_0.5_1.5_0.25-step
+#./generator 0.5 1.75 0.25 10 uniform_heavy 0.1 1 0 10 uniform_heavy_0.5_1.5_0.25-step

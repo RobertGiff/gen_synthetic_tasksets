@@ -166,7 +166,7 @@ create_and_xmlwrite_task(TiXmlElement *component, int *task_idx,
 		int *task_array, int *task_array_idx, int max_prio)
 {
 	double wcet = 0.0, period = 0.0, cur_util = 0.0;
-	int core, prio;
+	int core, prio = 0;
 	char name_buf[100]; /* 100 is arbitrary */
 	char xml_buf[100];  /* 100 is arbitrary */
 	char txt_buf[1000];  /* 1000 is arbitrary */
@@ -225,7 +225,8 @@ create_and_xmlwrite_task(TiXmlElement *component, int *task_idx,
 	sprintf(xml_buf, "%d", core);
 	xmltask->SetAttribute("core", xml_buf);
 
-	prio = (rand() % max_prio) + 1;
+	//prio = (rand() % max_prio) + 1;
+	prio = *task_idx;
 	memset(xml_buf, '\0', sizeof(xml_buf));
 	sprintf(xml_buf, "%d", prio);
 	xmltask->SetAttribute("prio", xml_buf);
@@ -312,6 +313,13 @@ main(int argc, char *argv[])
 	/* Generate tasksets for each util step */
 	for (double target_taskset_util = util_start ; target_taskset_util < util_end ; target_taskset_util += util_step) {
 		printf("TASKSET UTIL: %f\n", target_taskset_util);
+
+		/* FIXME REMOVE */
+		//if (target_taskset_util > 1.0) {
+		//	task_util_min = 0.05;
+		//	task_util_max = 0.20;
+		//	weight_lower  = -1.0;
+		//}
 
 		/* For each taskset util, we gen many tasksets */
 		for (int taskset_idx = 0 ; taskset_idx < num_tasksets_per_util ; taskset_idx++) {
